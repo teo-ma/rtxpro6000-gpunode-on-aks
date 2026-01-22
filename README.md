@@ -4,7 +4,7 @@
 
 这个仓库是一份“从零到可验证 GPU 推理”的 AKS（Azure Kubernetes Service）测试跑通手册与配套 Kubernetes 清单。
 
-本次测试基于 Azure 上的 **RTX Pro 6000** GPU 虚拟机规格：`Standard_NC128lds_xl_RTXPRO6000BSE_v6`，并将其作为 AKS 的 GPU 节点池（node pool）加入集群，在该 GPU 节点上完成驱动/插件安装与模型推理验证。该 GPU 属于 NVIDIA **Blackwell** 架构（日志中可见 `sm_120`），节点侧可能启用 MIG（Multi-Instance GPU），因此在容器内看到的设备名可能类似 *“NVIDIA RTX Pro 6000 Blackwell … MIG …”*。
+本次测试基于 Azure 上的 **RTX Pro 6000** GPU 虚拟机规格：`Standard_NC128lds_xl_RTXPRO6000BSE_v6`，并将其作为 AKS 的 GPU 节点池（node pool）加入集群，在该 GPU 节点上完成驱动/插件安装与模型推理验证。该 GPU 属于 NVIDIA **Blackwell** 架构（日志中可见 `sm_120`），节点侧启用 MIG（Multi-Instance GPU），因此在容器内看到的设备名可能类似 *“NVIDIA RTX Pro 6000 Blackwell … MIG …”*。
 
 目标是：
 
