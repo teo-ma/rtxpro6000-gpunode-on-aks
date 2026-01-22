@@ -1,0 +1,47 @@
+# Ensure GPU Operator can *see* and operate on the tainted GPU node.
+#
+# Our GPU node pool has the taint: sku=gpu:NoSchedule.
+# If Node Feature Discovery (NFD) can't run on that node, the operator
+# won't detect GPUs and will stay at: "No GPU node found".
+
+daemonsets:
+  tolerations:
+  - key: nvidia.com/gpu
+    operator: Exists
+    effect: NoSchedule
+  - key: "sku"
+    operator: "Equal"
+    value: "gpu"
+    effect: "NoSchedule"
+
+node-feature-discovery:
+  worker:
+    tolerations:
+    - key: "node-role.kubernetes.io/master"
+      operator: "Equal"
+      value: ""
+      effect: "NoSchedule"
+    - key: "node-role.kubernetes.io/control-plane"
+      operator: "Equal"
+      value: ""
+      effect: "NoSchedule"
+    - key: nvidia.com/gpu
+      operator: Exists
+      effect: NoSchedule
+    - key: "sku"
+      operator: "Equal"
+      value: "gpu"
+      effect: "NoSchedule"
+
+driver:
+  enabled: true
+  kernelModuleType: proprietary
+
+toolkit:
+  enabled: true
+
+devicePlugin:
+  enabled: true
+
+operator:
+  defaultRuntime: containerd

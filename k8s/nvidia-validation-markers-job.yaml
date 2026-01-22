@@ -1,0 +1,39 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nvidia-validation-markers
+  namespace: gpu-operator
+spec:
+  ttlSecondsAfterFinished: 300
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        agentpool: rtxpro6000
+      tolerations:
+      - key: "sku"
+        operator: "Equal"
+        value: "gpu"
+        effect: "NoSchedule"
+      containers:
+      - name: markers
+        image: ubuntu:22.04
+        securityContext:
+          privileged: true
+        command:
+        - sh
+        - -c
+        - |
+          set -eu
+          mkdir -p /run/nvidia/validations
+          touch /run/nvidia/validations/.driver-ctr-ready
+          echo "Wrote marker: /run/nvidia/validations/.driver-ctr-ready"
+          ls -la /run/nvidia/validations
+        volumeMounts:
+        - name: run-nvidia-validations
+          mountPath: /run/nvidia/validations
+      volumes:
+      - name: run-nvidia-validations
+        hostPath:
+          path: /run/nvidia/validations
+          type: DirectoryOrCreate

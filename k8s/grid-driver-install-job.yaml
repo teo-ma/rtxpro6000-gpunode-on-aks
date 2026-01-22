@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grid-driver-install
+  namespace: gpu-operator
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 7200
+  template:
+    metadata:
+      labels:
+        app: grid-driver-install
+    spec:
+      restartPolicy: Never
+      hostPID: true
+      tolerations:
+      - key: "sku"
+        operator: "Equal"
+        value: "gpu"
+        effect: "NoSchedule"
+      nodeSelector:
+        agentpool: rtxpro6000
+      containers:
+      - name: installer
+        image: ubuntu:22.04
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: host-root
+          mountPath: /host
+        command: [ "/bin/bash", "-lc" ]
+        args:
+        - |
+          set -euxo pipefail
+          URL='https://download.microsoft.com/download/85beffdc-8361-4df4-a823-dcb1b230a7aa/NVIDIA-Linux-x86_64-580.105.08-grid-azure.run'
+          chroot /host /bin/bash -lc "
+            set -euxo pipefail
+            if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L; then
+              echo 'NVIDIA driver already present on host.'
+              exit 0
+            fi
+
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update
+            apt-get install -y --no-install-recommends wget ca-certificates build-essential dkms pciutils linux-headers-\$(uname -r)
+
+            cd /tmp
+            wget -O NVIDIA-grid.run \"$URL\"
+            chmod +x NVIDIA-grid.run
+
+            # Prefer non-interactive install; fall back to the exact recommended command.
+            sh NVIDIA-grid.run --silent --accept-license --no-questions -M open || sh NVIDIA-grid.run -M open
+
+            modprobe nvidia || true
+            nvidia-smi
+          "
+      volumes:
+      - name: host-root
+        hostPath:
+          path: /
+          type: Directory

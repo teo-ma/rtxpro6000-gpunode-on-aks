@@ -1,0 +1,104 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: smollm2-135m-infer
+  namespace: default
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        agentpool: rtxpro6000
+      tolerations:
+      - key: "sku"
+        operator: "Equal"
+        value: "gpu"
+        effect: "NoSchedule"
+      containers:
+      - name: infer
+        image: python:3.11-slim
+        env:
+        - name: HF_HOME
+          value: /tmp/hf
+        - name: HF_HUB_DISABLE_TELEMETRY
+          value: "1"
+        command: [ "bash", "-lc" ]
+        args:
+        - |
+          set -euxo pipefail
+          python -V
+
+          # quick sanity: driver visible inside container
+          apt-get update
+          apt-get install -y --no-install-recommends git ca-certificates pciutils
+
+          if command -v nvidia-smi >/dev/null 2>&1; then
+            nvidia-smi
+          else
+            echo "nvidia-smi not found in this image (ok); GPU access relies on libcuda + torch" >&2
+          fi
+
+          python -m pip install --no-cache-dir --upgrade pip
+          # Blackwell(sm_120) 需要 cu128 + 对应的 PyTorch wheel（否则会出现 no kernel image）
+          python -m pip install --no-cache-dir --pre --index-url https://download.pytorch.org/whl/nightly/cu128 torch
+          python -m pip install --no-cache-dir transformers accelerate safetensors
+
+          python - <<'PY'
+          import torch
+          from transformers import AutoTokenizer, AutoModelForCausalLM
+
+          model_id = 'HuggingFaceTB/SmolLM2-135M-Instruct'
+          print('model:', model_id)
+          print('torch:', torch.__version__)
+          print('cuda available:', torch.cuda.is_available())
+
+          assert torch.cuda.is_available(), 'CUDA not available inside pod'
+          print('arch list:', torch.cuda.get_arch_list())
+          print('device:', torch.cuda.get_device_name(0))
+
+          # force a tiny CUDA op early (surface arch issues immediately)
+          _ = torch.randn(1, device='cuda')
+
+          tokenizer = AutoTokenizer.from_pretrained(model_id)
+          model = AutoModelForCausalLM.from_pretrained(model_id, torch_dtype=torch.float16)
+          model = model.to('cuda')
+          model.eval()
+
+          messages = [
+              {"role": "system", "content": "You are a concise assistant."},
+              {"role": "user", "content": "用中文回答：用三句话介绍一下 AKS 上的 GPU 驱动安装方式。"},
+          ]
+
+          if hasattr(tokenizer, 'apply_chat_template'):
+              prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+              inputs = tokenizer(prompt, return_tensors='pt')
+          else:
+              prompt = messages[-1]['content']
+              inputs = tokenizer(prompt, return_tensors='pt')
+
+          inputs = {k: v.to('cuda') for k, v in inputs.items()}
+
+          with torch.no_grad():
+              out = model.generate(
+                  **inputs,
+                  max_new_tokens=128,
+                  do_sample=True,
+                  temperature=0.7,
+                  top_p=0.95,
+              )
+
+          text = tokenizer.decode(out[0], skip_special_tokens=True)
+          print('--- generated ---')
+          print(text)
+          PY
+        resources:
+          limits:
+            nvidia.com/gpu: 1
+            cpu: "2000m"
+            memory: "8Gi"
+          requests:
+            nvidia.com/gpu: 1
+            cpu: "1000m"
+            memory: "6Gi"
