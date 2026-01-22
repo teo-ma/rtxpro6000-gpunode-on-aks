@@ -2,7 +2,7 @@
 
 ## 介绍
 
-这个仓库是一份“从零到可验证 GPU 推理”的 AKS（Azure Kubernetes Service）测试跑通手册与配套 Kubernetes 清单。
+这个仓库是一份“从零到可验证 RTX pro 6000 GPU node推理”的 AKS（Azure Kubernetes Service）测试跑通手册与配套 Kubernetes 清单。
 
 本次测试基于 Azure 上的 **RTX Pro 6000** GPU 虚拟机规格：`Standard_NC128lds_xl_RTXPRO6000BSE_v6`，并将其作为 AKS 的 GPU 节点池（node pool）加入集群，在该 GPU 节点上完成驱动/插件安装与模型推理验证。该 GPU 属于 NVIDIA **Blackwell** 架构（日志中可见 `sm_120`），节点侧启用 MIG（Multi-Instance GPU），因此在容器内看到的设备名可能类似 *“NVIDIA RTX Pro 6000 Blackwell … MIG …”*。
 
@@ -17,8 +17,8 @@
 
 ### 限制与注意事项（RTX Pro 6000 / Blackwell 作为 AKS GPU 节点）
 
-- 区域与配额：本测试使用 `centraluseuap`（EUAP）。该 SKU 在不同订阅/区域的可用性与配额差异较大，创建失败时优先检查配额与区域可用性。
-- 当前2026年1月GPU node创建时不支持azure可用区（AZ）选择。创建时确认不选中所有的AZ。
+- 区域与配额：本测试使用 `centraluseuap`（EUAP）。当前（2026年1月）在westus2也可以提供NC RTX pro 6000系列GPU VM资源作为AKS GPU node。创建前请确认和选择有配额的region。
+- 当前（2026年1月）GPU node创建时不支持azure可用区（AZ）选择。创建时确认不选中所有的AZ。
 - 驱动“自动选择/自动安装”限制：针对该 RTX Pro 6000 Blackwell SKU，本测试未走 AKS 的自动 GPU Driver 管理（当前2026年1月还不支持GPU driver自动安装），而是在创建节点池时使用 `--gpu-driver None`，再通过特权 Job 在宿主机安装 Microsoft GRID runfile 驱动（见步骤 4）。
 - Blackwell 软件栈兼容性：`sm_120` 是新架构，许多稳定版深度学习框架 wheel 可能尚未包含 `sm_120` 的内核，容易报 `no kernel image` / `CUDA_ERROR_NO_BINARY_FOR_GPU`。因此推理验证建议使用支持 `sm_120` 的版本（本仓库采用 PyTorch nightly `cu128`）。
 - GPU 节点调度约束：GPU 节点池通常会加 taint（本仓库使用 `sku=gpu:NoSchedule`），所有要跑到 GPU 节点的 Pod 都必须配置 toleration，并最好加 `nodeSelector: agentpool=rtxpro6000`。
